@@ -129,7 +129,8 @@ def telegram_webhook():
                         stone_type = "Хризолит"
 
             response_text = ""
-            density = ALL_DENSITIES.get(stone_type)
+            normalized_type = stone_type.lower().strip()
+                density = {k.lower(): v for k, v in ALL_DENSITIES.items()}.get(normalized_type)
 
             if length and width and form and stone_type and density:
                 if form in ["сфера", "шар"]:
@@ -173,3 +174,4 @@ def index():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
