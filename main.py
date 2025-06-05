@@ -75,6 +75,7 @@ def find_closest_stone(length, width, form, stone_type):
     return None
 
 def identify_stone_with_vision(image_url):
+    print("📷 Vision URL:", image_url)
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -87,6 +88,7 @@ def identify_stone_with_vision(image_url):
             ],
             max_tokens=150
         )
+        print("🧠 Vision ответ:", response.choices[0].message.content.strip())
         return response.choices[0].message.content.strip()
     except Exception as e:
         print("❌ Vision ошибка:", e)
@@ -102,8 +104,13 @@ def telegram_webhook():
         if "photo" in message:
             file_id = message["photo"][-1]["file_id"]
             caption = message.get("caption", "")
+            print("✉️ Подпись:", caption)
             length, width = extract_dimensions(caption)
             file_url = get_file_url(file_id)
+
+            if not file_url:
+                send_message(chat_id, "⛔ Не удалось получить изображение.")
+                return "ok"
 
             vision_result = identify_stone_with_vision(file_url)
             form, stone_type = None, None
@@ -117,7 +124,7 @@ def telegram_webhook():
                     form = form_match.group(1).strip().lower()
                 type_match = re.search(r"Вид[:\s]+(.+)", vision_result, re.IGNORECASE)
                 if type_match:
-                    stone_type = type_match.group(1).strip().capitalize().split("(")[0]
+                    stone_type = type_match.group(1).strip().capitalize().split("(")[0].strip()
                     if stone_type.lower() == "перидот":
                         stone_type = "Хризолит"
 
