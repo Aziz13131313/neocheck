@@ -5,11 +5,7 @@ import openai
 import pandas as pd
 from math import pi
 
-# ✅ Указываем ключ правильно — только один раз!
-client = openai.OpenAI(
-    api_key="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"
-)
-
+client = openai.OpenAI(api_key="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")
 TELEGRAM_TOKEN = "7743518282:AAEQ29yMWS19-Tb4NTu5p02Rh68iI0cYziE"
 TELEGRAM_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
@@ -83,13 +79,25 @@ def identify_stone_with_vision(image_url):
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "Ты эксперт-геммолог. Игнорируй руки, кожу, кольца. Определи:\n- Вид\n- Альтернатива\n- Форму (овал, кабошон, маркиз и т.д.)\n\nФормат:\nВид: [Название]\nАльтернатива: [Вариант]\nФорма: [Форма]"},
-                {"role": "user", "content": [
-                    {"type": "text", "text": "Что это за камень? Только камень на фото. Дай вид, альтернативу и форму."},
-                    {"type": "image_url", "image_url": {"url": image_url}}
-                ]}
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "Ты эксперт-геммолог. Проанализируй изображение камня. "
+                                "Игнорируй кожу, пальцы, фон и освещение. Ответь в формате:\n"
+                                "Вид: [Название]\nАльтернатива: [Вариант]\nФорма: [Форма]"
+                            )
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": image_url}
+                        }
+                    ]
+                }
             ],
-            max_tokens=150
+            max_tokens=200
         )
         result = response.choices[0].message.content.strip()
         print("🧠 Vision ответ:", result)
