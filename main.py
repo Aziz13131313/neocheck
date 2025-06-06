@@ -5,6 +5,14 @@ import openai
 import pandas as pd
 from math import pi
 
+# ✅ Указываем ключ правильно — только один раз!
+client = openai.OpenAI(
+    api_key="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"
+)
+
+TELEGRAM_TOKEN = "7743518282:AAEQ29yMWS19-Tb4NTu5p02Rh68iI0cYziE"
+TELEGRAM_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
+
 ALL_DENSITIES = {
     "Аквамарин": 2.7, "Агат": 2.6, "Жемчуг": 2.7, "Гагат": 1.3, "Гематит": 5.3, "Малахит": 4.0,
     "Дымчатый кварц": 2.65, "Александрит": 3.68, "Аметист": 2.65, "Циркон": 4.6, "Хрусталь": 2.65,
@@ -13,12 +21,6 @@ ALL_DENSITIES = {
     "Четырёхлистник": 2.7, "Пятилучевая": 2.7, "Перламутр": 2.7
 }
 
-TELEGRAM_TOKEN = "7743518282:AAEQ29yMWS19-Tb4NTu5p02Rh68iI0cYziE"
-TELEGRAM_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
-OPENAI_API_KEY = openai.api_key = "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"
-
-
-client = openai.OpenAI(api_key=OPENAI_API_KEY)
 app = Flask(__name__)
 
 try:
@@ -179,5 +181,6 @@ def index():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
 
 
