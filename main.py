@@ -88,8 +88,9 @@ def identify_stone_with_vision(image_url):
             ],
             max_tokens=150
         )
-        print("🧠 Vision ответ:", response.choices[0].message.content.strip())
-        return response.choices[0].message.content.strip()
+        result = response.choices[0].message.content.strip()
+        print("🧠 Vision ответ:", result)
+        return result
     except Exception as e:
         print("❌ Vision ошибка:", e)
         return None
@@ -129,8 +130,11 @@ def telegram_webhook():
                         stone_type = "Хризолит"
 
             response_text = ""
-            normalized_type = stone_type.lower().strip()
+            if stone_type:
+                normalized_type = stone_type.lower().strip()
                 density = {k.lower(): v for k, v in ALL_DENSITIES.items()}.get(normalized_type)
+            else:
+                density = None
 
             if length and width and form and stone_type and density:
                 if form in ["сфера", "шар"]:
@@ -171,6 +175,9 @@ def telegram_webhook():
 @app.route("/", methods=["GET"])
 def index():
     return "✅ Бот работает", 200
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
