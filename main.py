@@ -5,7 +5,10 @@ import openai
 import pandas as pd
 from math import pi
 
-client = openai.OpenAI(api_key="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")
+client = openai.OpenAI(
+    api_key="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"
+)
+
 TELEGRAM_TOKEN = "7743518282:AAEQ29yMWS19-Tb4NTu5p02Rh68iI0cYziE"
 TELEGRAM_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
@@ -47,6 +50,7 @@ def get_file_url(file_id):
         path = res.json()["result"]["file_path"]
         return f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{path}"
     except KeyError:
+        print("❌ Не удалось получить file_path")
         return None
 
 def send_message(chat_id, text):
@@ -79,25 +83,13 @@ def identify_stone_with_vision(image_url):
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": (
-                                "Ты эксперт-геммолог. Проанализируй изображение камня. "
-                                "Игнорируй кожу, пальцы, фон и освещение. Ответь в формате:\n"
-                                "Вид: [Название]\nАльтернатива: [Вариант]\nФорма: [Форма]"
-                            )
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": image_url}
-                        }
-                    ]
-                }
+                {"role": "system", "content": "Ты эксперт-геммолог. Игнорируй руки, кожу, кольца. Определи:\n- Вид\n- Альтернатива\n- Форму (овал, кабошон, маркиз и т.д.)\n\nФормат:\nВид: [Название]\nАльтернатива: [Вариант]\nФорма: [Форма]"},
+                {"role": "user", "content": [
+                    {"type": "text", "text": "Что это за камень? Только камень на фото. Дай вид, альтернативу и форму."},
+                    {"type": "image_url", "image_url": {"url": image_url}}
+                ]}
             ],
-            max_tokens=200
+            max_tokens=150
         )
         result = response.choices[0].message.content.strip()
         print("🧠 Vision ответ:", result)
@@ -108,6 +100,7 @@ def identify_stone_with_vision(image_url):
 
 @app.route("/", methods=["POST"])
 def telegram_webhook():
+    print("📥 Получено сообщение от Telegram!")
     data = request.get_json()
     if "message" in data:
         message = data["message"]
@@ -119,6 +112,7 @@ def telegram_webhook():
             print("✉️ Подпись:", caption)
             length, width = extract_dimensions(caption)
             file_url = get_file_url(file_id)
+            print("📁 file_url:", file_url)
 
             if not file_url:
                 send_message(chat_id, "⛔ Не удалось получить изображение.")
@@ -189,6 +183,7 @@ def index():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
 
 
 
