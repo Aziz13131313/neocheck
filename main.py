@@ -4,9 +4,10 @@ import re
 import openai
 import pandas as pd
 from math import pi
+import os
 
 client = openai.OpenAI(
-    api_key="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"
+    api_key=os.getenv("OPENAI_API_KEY")
 )
 
 TELEGRAM_TOKEN = "7743518282:AAEQ29yMWS19-Tb4NTu5p02Rh68iI0cYziE"
