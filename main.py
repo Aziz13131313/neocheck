@@ -6,7 +6,7 @@ import pandas as pd
 from math import pi
 
 client = openai.OpenAI(
-    api_key="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"
+    api_key="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"
 )
 
 TELEGRAM_TOKEN = "7743518282:AAEQ29yMWS19-Tb4NTu5p02Rh68iI0cYziE"
@@ -17,7 +17,18 @@ ALL_DENSITIES = {
     "Дымчатый кварц": 2.65, "Александрит": 3.68, "Аметист": 2.65, "Циркон": 4.6, "Хрусталь": 2.65,
     "Топаз": 3.5, "Рубин": 4.0, "Сапфир": 4.0, "Изумруд": 2.7, "Стекло": 2.5, "Пластик": 1.2,
     "Эмаль": 2.3, "Металл": 8.0, "Флюорит": 3.18, "Гранат": 4.1, "Фианит": 5.5, "Хризолит": 3.3,
-    "Четырёхлистник": 2.7, "Пятилучевая": 2.7, "Перламутр": 2.7
+    "Перламутр": 2.7, "Клевер": 2.7, "Четырехлистник": 2.7, "Пятилистник": 2.7, "Шестилистник": 2.7
+}
+
+NORMALIZED_FORMS = {
+    f.strip().lower(): f.strip().lower() for f in [
+        'груша', 'кабошон', 'кабошон овал', 'кабошон капля', 'кабошон квадрат', 'кабошон круг',
+        'кабошон маркиз', 'кабошон овал', 'кабошон прямоугольник', 'кабошон сердце', 'кабошон сфера',
+        'кабошон удлиненный овал', 'кабюшон', 'капля', 'квадрат', 'клевер', 'круг', 'маркиз',
+        'овал', 'овал удлиненный', 'полукруг', 'прямоугольник', 'прямоугольник удлиненный', 'пятилистник',
+        'ромб', 'сердце', 'сфера', 'треугольник', 'удлиненный овал', 'фантазия', 'цветок',
+        'цветочник', 'четырехлистник', 'шестилистник', 'шар'
+    ]
 }
 
 app = Flask(__name__)
@@ -40,149 +51,113 @@ def extract_dimensions(text):
         return float(numbers[0].replace(",", ".")), float(numbers[1].replace(",", "."))
     return None, None
 
-def extract_manual_type(text):
-    match = re.search(r"Вид[:\s]+([А-Яа-яA-Za-z-\s]+)", text)
-    return match.group(1).strip() if match else None
-
 def get_file_url(file_id):
     res = requests.get(f"{TELEGRAM_URL}/getFile?file_id={file_id}")
     try:
         path = res.json()["result"]["file_path"]
         return f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{path}"
     except KeyError:
-        print("❌ Не удалось получить file_path")
         return None
 
 def send_message(chat_id, text):
     requests.post(f"{TELEGRAM_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
 
-def find_closest_stone(length, width, form, stone_type):
-    df_filtered = df_stones[
-        (df_stones["Форма"] == form) &
-        (df_stones["Название"] == stone_type)
-    ].copy()
-    df_filtered["delta"] = ((df_filtered["Длина"] - length)**2 + (df_filtered["Ширина"] - width)**2)**0.5
-    df_nearest = df_filtered[df_filtered["delta"] <= 3.0].sort_values(by="delta")
-    if not df_nearest.empty:
-        best = df_nearest.iloc[0]
-        delta = best["delta"]
-        if delta < 1.0:
-            corrected_weight = best["Вес сброса"]
-        else:
-            correction = min(0.1 * delta, 0.15)
-            if length > best["Длина"] or width > best["Ширина"]:
-                corrected_weight = round(best["Вес сброса"] * (1 + correction), 2)
-            else:
-                corrected_weight = round(best["Вес сброса"] * (1 - correction), 2)
-        return best["Длина"], best["Ширина"], best["Высота"], corrected_weight
-    return None
-
 def identify_stone_with_vision(image_url):
-    print("📷 Vision URL:", image_url)
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "Ты эксперт-геммолог. Игнорируй руки, кожу, кольца. Определи:\n- Вид\n- Альтернатива\n- Форму (овал, кабошон, маркиз и т.д.)\n\nФормат:\nВид: [Название]\nАльтернатива: [Вариант]\nФорма: [Форма]"},
+                {"role": "system", "content": "Ты эксперт-геммолог. Игнорируй кожу и фон. Дай: Вид: Альтернатива: Форма:"},
                 {"role": "user", "content": [
-                    {"type": "text", "text": "Что это за камень? Только камень на фото. Дай вид, альтернативу и форму."},
+                    {"type": "text", "text": "Что за камень на фото?"},
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]}
             ],
             max_tokens=150
         )
         result = response.choices[0].message.content.strip()
-        print("🧠 Vision ответ:", result)
         return result
     except Exception as e:
-        print("❌ Vision ошибка:", e)
+        print("❌ Ошибка Vision:", e)
         return None
+
+def normalize_form(f):
+    f = f.strip().lower()
+    return NORMALIZED_FORMS.get(f, f)
+
+def find_closest_stone(length, width, form, stone_type):
+    form = normalize_form(form)
+    df_filtered = df_stones[(df_stones["Форма"] == form) & (df_stones["Название"] == stone_type)]
+    df_filtered = df_filtered.copy()
+    df_filtered["delta"] = ((df_filtered["Длина"] - length)**2 + (df_filtered["Ширина"] - width)**2)**0.5
+    df_nearest = df_filtered[df_filtered["delta"] <= 3.0].sort_values(by="delta")
+    if not df_nearest.empty:
+        best = df_nearest.iloc[0]
+        delta = best["delta"]
+        correction = min(0.1 * delta, 0.15)
+        if delta < 1:
+            weight = best["Вес сброса"]
+        elif length > best["Длина"] or width > best["Ширина"]:
+            weight = round(best["Вес сброса"] * (1 + correction), 2)
+        else:
+            weight = round(best["Вес сброса"] * (1 - correction), 2)
+        return best["Длина"], best["Ширина"], best["Высота"], weight
+    return None
 
 @app.route("/", methods=["POST"])
 def telegram_webhook():
-    print("📥 Получено сообщение от Telegram!")
     data = request.get_json()
     if "message" in data:
-        message = data["message"]
-        chat_id = message["chat"]["id"]
+        msg = data["message"]
+        chat_id = msg["chat"]["id"]
+        caption = msg.get("caption", "")
+        length, width = extract_dimensions(caption)
+        file_id = msg["photo"][-1]["file_id"]
+        url = get_file_url(file_id)
+        vision = identify_stone_with_vision(url) or ""
 
-        if "photo" in message:
-            file_id = message["photo"][-1]["file_id"]
-            caption = message.get("caption", "")
-            print("✉️ Подпись:", caption)
-            length, width = extract_dimensions(caption)
-            file_url = get_file_url(file_id)
-            print("📁 file_url:", file_url)
+        stone_type = re.search(r"Вид[:\s]+(.+)", vision)
+        form = re.search(r"Форма[:\s]+(.+)", vision)
+        stone_type = stone_type.group(1).strip().capitalize() if stone_type else None
+        form = normalize_form(form.group(1).strip()) if form else None
 
-            if not file_url:
-                send_message(chat_id, "⛔ Не удалось получить изображение.")
-                return "ok"
+        density = ALL_DENSITIES.get(stone_type)
+        response = ""
 
-            vision_result = identify_stone_with_vision(file_url)
-            form, stone_type = None, None
-
-            manual_type = extract_manual_type(caption)
-            if manual_type:
-                stone_type = manual_type.strip().capitalize()
-            elif vision_result:
-                form_match = re.search(r"Форма[:\s]+(.+)", vision_result, re.IGNORECASE)
-                if form_match:
-                    form = form_match.group(1).strip().lower()
-                type_match = re.search(r"Вид[:\s]+(.+)", vision_result, re.IGNORECASE)
-                if type_match:
-                    stone_type = type_match.group(1).strip().capitalize().split("(")[0].strip()
-                    if stone_type.lower() == "перидот":
-                        stone_type = "Хризолит"
-
-            response_text = ""
-            if stone_type:
-                normalized_type = stone_type.lower().strip()
-                density = {k.lower(): v for k, v in ALL_DENSITIES.items()}.get(normalized_type)
+        if length and width and form and stone_type and density:
+            if form in ["шар", "сфера", "кабошон сфера"]:
+                radius = length / 2
+                volume = (4/3) * pi * radius ** 3
+                height = length
+            elif form in ["клевер", "четырехлистник", "пятилистник", "шестилистник"]:
+                height = 2.0
+                volume = (pi * length * width * height) / 6
             else:
-                density = None
-
-            if length and width and form and stone_type and density:
-                if form in ["сфера", "шар"]:
-                    radius = length / 2
-                    volume = (4/3) * pi * (radius ** 3)
-                    weight = round(volume * density / 1000, 2)
-                    response_text += f"⚫️ Сфера\n📏 Диаметр: {length} мм\n⚖️ Вес: ~{weight} г\n"
-                else:
-                    result = find_closest_stone(length, width, form, stone_type)
-                    if result:
-                        best_length, best_width, best_height, corrected_weight = result
-                        response_text += (
-                            f"📏 Размер: {best_length} × {best_width} × {best_height} мм\n"
-                            f"⚖️ Вес: ~{corrected_weight} г\n"
-                            f"📐 Форма: {form}\n"
-                        )
-                    else:
-                        avg_h = (length + width) / 4
-                        volume = (pi * length * width * avg_h) / 6
-                        weight = round(volume * density / 1000, 2)
-                        response_text += (
-                            f"📐 Форма: {form}\n"
-                            f"📏 Размер: {length} × {width} × {round(avg_h, 2)} мм\n"
-                            f"⚖️ Расчётный вес: ~{weight} г по плотности {density}\n"
-                        )
-
-            if vision_result:
-                response_text += f"\n🧠 Vision:\n{vision_result}"
-            else:
-                response_text += "🤖 Не удалось распознать камень."
-
-            send_message(chat_id, response_text)
+                result = find_closest_stone(length, width, form, stone_type)
+                if result:
+                    l, w, h, weight = result
+                    response += f"📏 {l}×{w}×{h} мм\n⚖️ ~{weight} г\nФорма: {form}\n"
+                    send_message(chat_id, response + "\n🧠 Vision:\n" + vision)
+                    return "ok"
+                height = (length + width) / 4
+                volume = (pi * length * width * height) / 6
+            weight = round(volume * density / 1000, 2)
+            response += f"📏 {length}×{width}×{round(height,2)} мм\n⚖️ ~{weight} г\nФорма: {form}\n"
         else:
-            send_message(chat_id, "📷 Пришли фото камня с размерами в подписи.")
+            response = "❌ Не удалось определить вид, форму или плотность."
 
+        response += "\n🧠 Vision:\n" + vision
+        send_message(chat_id, response)
     return "ok"
 
-@app.route("/", methods=["GET"])
+@app.route("/")
 def index():
     return "✅ Бот работает", 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
+
 
 
 
