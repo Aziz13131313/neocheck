@@ -20,6 +20,7 @@ try:
     df_stones["Ширина"] = pd.to_numeric(df_stones["Ширина"], errors="coerce")
     df_stones["Высота"] = pd.to_numeric(df_stones["Высота"], errors="coerce")
     df_stones["Вес сброса"] = pd.to_numeric(df_stones["Вес сброса"], errors="coerce")
+    df_stones["Форма"] = df_stones["Форма"].astype(str).str.strip().str.lower()
 except Exception as e:
     print("❌ Ошибка загрузки таблицы:", e)
     df_stones = pd.DataFrame()
@@ -34,20 +35,32 @@ DENSITY_MAP = {
 }
 
 SHAPE_COEFFS = {
-    "Круг": 0.0018, "Овал": 0.0017, "Удлиненный овал": 0.00165, "Маркиз": 0.0016,
-    "Прямоугольник": 0.0015, "Квадрат": 0.0016, "Груша": 0.0016, "Сердце": 0.00155,
-    "Клевер": 0.0015, "Четырехлистник": 0.0015, "Пятилистник": 0.0015, "Шестилистник": 0.0015,
-    "Кабошон овал": 0.0017, "Кабошон круг": 0.0018, "Кабошон квадрат": 0.0016,
-    "Кабошон прямоугольник": 0.0015, "Кабошон сфера": 0.0019, "Удлиненный прямоугольник": 0.0014
+    "круг": 0.0018, "овал": 0.0017, "удлиненный овал": 0.00165, "маркиз": 0.0016,
+    "прямоугольник": 0.0015, "квадрат": 0.0016, "груша": 0.0016, "сердце": 0.00155,
+    "клевер": 0.0015, "четырехлистник": 0.0015, "пятилистник": 0.0015, "шестилистник": 0.0015
 }
 
+SHAPE_ALIASES = {
+    "четырёхлепестковая": "четырехлистник",
+    "четырёхлистник": "четырехлистник",
+    "клевер": "четырехлистник",
+    "удлинённый прямоугольник": "прямоугольник",
+    "кабошон овал": "овал",
+    "кабошон круг": "круг",
+    "кабошон квадрат": "квадрат",
+    "кабошон": "круг",
+    "багет": "прямоугольник"
+}
+
+def normalize_shape(shape):
+    shape = shape.strip().lower()
+    return SHAPE_ALIASES.get(shape, shape)
 
 def extract_dimensions(text):
     numbers = re.findall(r"(\d+(?:[.,]\d+)?)", text)
     if len(numbers) >= 2:
         return float(numbers[0].replace(",", ".")), float(numbers[1].replace(",", "."))
     return None, None
-
 
 def get_file_url(file_id):
     res = requests.get(f"{TELEGRAM_URL}/getFile?file_id={file_id}")
@@ -58,11 +71,9 @@ def get_file_url(file_id):
         print("⚠️ Ошибка получения file_path", res.text)
         return None
 
-
 def send_message(chat_id, text):
     print("📤 Ответ:", text)
     requests.post(f"{TELEGRAM_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
-
 
 def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0):
     if df_stones.empty:
@@ -70,7 +81,7 @@ def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0
 
     df_filtered = df_stones.copy()
     if shape:
-        df_filtered = df_filtered[df_filtered["Форма"].str.lower() == shape.lower()]
+        df_filtered = df_filtered[df_filtered["Форма"] == shape]
     if stone_type:
         df_filtered = df_filtered[df_filtered["Название"].str.lower().str.contains(stone_type.lower())]
 
@@ -89,24 +100,22 @@ def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0
         }
     return None
 
-
 def estimate_weight(length, width, shape, stone_type):
-    shape_lower = shape.lower()
+    shape = normalize_shape(shape)
     density = DENSITY_MAP.get(stone_type, 2.5)
 
-    if shape_lower in ["клевер", "четырехлистник", "пятилистник", "шестилистник"]:
+    if shape in ["клевер", "четырехлистник", "пятилистник", "шестилистник"]:
         height = 2.0
-        coeff = SHAPE_COEFFS.get(shape.capitalize(), 0.0015)
+        coeff = SHAPE_COEFFS.get(shape, 0.0015)
         volume = coeff * length * width * height
-    elif shape_lower in ["шар", "сфера", "кабошон сфера"]:
+    elif shape in ["шар", "сфера"]:
         height = length
-        volume = length * width * height
+        volume = (4/3) * 3.1416 * (length / 2) ** 3
     else:
         coeff = SHAPE_COEFFS.get(shape, 0.0016)
         volume = coeff * length * width
 
     return round(volume * density, 2)
-
 
 def identify_stone_with_vision(image_url):
     try:
@@ -132,7 +141,6 @@ def identify_stone_with_vision(image_url):
         print("❌ Ошибка Vision:", e)
         return None
 
-
 @app.route("/", methods=["POST"])
 def telegram_webhook():
     data = request.get_json()
@@ -155,7 +163,7 @@ def telegram_webhook():
             if vision_result:
                 for line in vision_result.splitlines():
                     if line.lower().startswith("форма"):
-                        shape = line.split(":", 1)[-1].strip()
+                        shape = normalize_shape(line.split(":", 1)[-1].strip())
                     elif line.lower().startswith("вид"):
                         stone_type = line.split(":", 1)[-1].strip()
 
@@ -187,9 +195,9 @@ def telegram_webhook():
 
     return "ok"
 
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
 
 
 
