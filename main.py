@@ -24,42 +24,28 @@ except Exception as e:
     print("❌ Ошибка загрузки таблицы:", e)
     df_stones = pd.DataFrame()
 
-# Формулы плотностей по видам камней (по умолчанию)
+# Плотности
 DENSITY_MAP = {
-    "Рубин": 4.0,
-    "Аметист": 2.65,
-    "Топаз": 3.5,
-    "Гранат": 3.95,
-    "Хризолит": 3.3,
-    "Циркон": 4.6,
-    "Шпинель": 3.6,
-    "Турмалин": 3.1,
-    "Аквамарин": 2.7,
-    "Изумруд": 2.8,
-    "Гематит": 5.2,
-    "Кварц": 2.65,
-    "Кварц дымчатый": 2.65,
-    "Обсидиан": 2.4,
-    "Стекло": 2.5,
-    "Неизвестно": 2.5
+    "Рубин": 4.0, "Аметист": 2.65, "Топаз": 3.5, "Гранат": 3.95, "Хризолит": 3.3,
+    "Циркон": 4.6, "Шпинель": 3.6, "Турмалин": 3.1, "Аквамарин": 2.7, "Изумруд": 2.8,
+    "Гематит": 5.2, "Кварц": 2.65, "Кварц дымчатый": 2.65, "Обсидиан": 2.4,
+    "Стекло": 2.5, "Неизвестно": 2.5, "Жемчуг": 2.7, "Гагат": 1.3, "Фианит": 5.5,
+    "Флюорит": 3.18, "Малахит": 4.0, "Перламутр": 2.7, "Пластик": 1.2, "Металл": 8.0
 }
 
 SHAPE_COEFFS = {
-    "Круг": 0.0018,
-    "Овал": 0.0017,
-    "Удлиненный овал": 0.00165,
-    "Маркиз": 0.0016,
-    "Прямоугольник": 0.0015,
-    "Квадрат": 0.0016,
-    "Груша": 0.0016,
-    "Сердце": 0.00155
+    "Круг": 0.0018, "Овал": 0.0017, "Удлиненный овал": 0.00165, "Маркиз": 0.0016,
+    "Прямоугольник": 0.0015, "Квадрат": 0.0016, "Груша": 0.0016, "Сердце": 0.00155,
+    "Клевер": 0.0015, "Четырехлистник": 0.0015, "Пятилистник": 0.0015, "Шестилистник": 0.0015
 }
+
 
 def extract_dimensions(text):
     numbers = re.findall(r"(\d+(?:[.,]\d+)?)", text)
     if len(numbers) >= 2:
         return float(numbers[0].replace(",", ".")), float(numbers[1].replace(",", "."))
     return None, None
+
 
 def get_file_url(file_id):
     res = requests.get(f"{TELEGRAM_URL}/getFile?file_id={file_id}")
@@ -70,9 +56,11 @@ def get_file_url(file_id):
         print("⚠️ Ошибка получения file_path", res.text)
         return None
 
+
 def send_message(chat_id, text):
     print("📤 Ответ:", text)
     requests.post(f"{TELEGRAM_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
+
 
 def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0):
     if df_stones.empty:
@@ -84,7 +72,7 @@ def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0
     if stone_type:
         df_filtered = df_filtered[df_filtered["Название"].str.lower().str.contains(stone_type.lower())]
 
-    df_filtered["delta"] = ((df_filtered["Длина"] - length)**2 + (df_filtered["Ширина"] - width)**2)**0.5
+    df_filtered["delta"] = ((df_filtered["Длина"] - length) ** 2 + (df_filtered["Ширина"] - width) ** 2) ** 0.5
     df_nearest = df_filtered[df_filtered["delta"] <= tolerance].sort_values(by="delta")
 
     if not df_nearest.empty:
@@ -99,11 +87,24 @@ def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0
         }
     return None
 
+
 def estimate_weight(length, width, shape, stone_type):
+    shape_lower = shape.lower()
     density = DENSITY_MAP.get(stone_type, 2.5)
-    coeff = SHAPE_COEFFS.get(shape, 0.0016)
-    volume = coeff * length * width
+
+    if shape_lower in ["клевер", "четырехлистник", "пятилистник", "шестилистник"]:
+        height = 2.0
+        coeff = SHAPE_COEFFS.get(shape.capitalize(), 0.0015)
+        volume = coeff * length * width * height
+    elif shape_lower in ["шар", "сфера", "кабошон сфера"]:
+        height = length  # длина = ширина = высота
+        volume = (4/3) * 3.1416 * (length / 2) ** 3
+    else:
+        coeff = SHAPE_COEFFS.get(shape, 0.0016)
+        volume = coeff * length * width
+
     return round(volume * density, 2)
+
 
 def identify_stone_with_vision(image_url):
     try:
@@ -128,6 +129,7 @@ def identify_stone_with_vision(image_url):
     except Exception as e:
         print("❌ Ошибка Vision:", e)
         return None
+
 
 @app.route("/", methods=["POST"])
 def telegram_webhook():
@@ -183,9 +185,9 @@ def telegram_webhook():
 
     return "ok"
 
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
-
 
 
 
