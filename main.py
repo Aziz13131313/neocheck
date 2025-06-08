@@ -68,13 +68,16 @@ def identify_stone_with_vision(image_url):
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "Ты эксперт-геммолог. Игнорируй кожу и фон. Дай: Вид: Альтернатива: Форма:"},
+                {"role": "system", "content": (
+                    "Ты эксперт-геммолог. Игнорируй пальцы, тени и фон. Ответь строго в этом формате, без пояснений и лишнего текста:\n"
+                    "Вид: [Название]\nАльтернатива: [Альтернатива]\nФорма: [Форма]"
+                )},
                 {"role": "user", "content": [
                     {"type": "text", "text": "Что за камень на фото?"},
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]}
             ],
-            max_tokens=150
+            max_tokens=300
         )
         result = response.choices[0].message.content.strip()
         return result
@@ -157,6 +160,7 @@ def index():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
 
 
 
