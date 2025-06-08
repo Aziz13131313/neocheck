@@ -1,7 +1,9 @@
+import os
 import openai
 
+# ✅ Читаем ключ из переменной окружения
 client = openai.OpenAI(
-    api_key="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"
+    api_key=os.getenv("OPENAI_API_KEY")
 )
 
 image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Ruby_gem.JPG/1200px-Ruby_gem.JPG"
@@ -22,11 +24,11 @@ try:
                 ]
             }
         ],
-        max_tokens=200
+        max_tokens=150
     )
-
-    print("✅ Ответ от Vision:\n")
-    print(response.choices[0].message.content)
-
+    print("🧠 Ответ Vision:")
+    print(response.choices[0].message.content.strip())
 except Exception as e:
-    print("❌ Ошибка Vision:\n", e)
+    print("❌ Ошибка Vision:")
+    print(e)
+
