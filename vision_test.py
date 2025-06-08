@@ -1,11 +1,12 @@
 import os
 import openai
 
-# ✅ Читаем ключ из переменной окружения
+# ✅ Получаем ключ из переменной окружения
 client = openai.OpenAI(
     api_key=os.getenv("OPENAI_API_KEY")
 )
 
+# Тестовая ссылка на фото камня (замени на своё фото по ссылке, если надо)
 image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Ruby_gem.JPG/1200px-Ruby_gem.JPG"
 
 try:
@@ -14,7 +15,7 @@ try:
         messages=[
             {
                 "role": "system",
-                "content": "Ты эксперт-геммолог. Игнорируй фон и пальцы. Дай:\nВид: [Название]\nАльтернатива: [Вариант]\nФорма: [Форма]"
+                "content": "Ты эксперт-геммолог. Игнорируй фон и пальцы. Дай: Вид: [Название] Альтернатива: [Вариант] Форма: [Форма]"
             },
             {
                 "role": "user",
@@ -26,9 +27,9 @@ try:
         ],
         max_tokens=150
     )
-    print("🧠 Ответ Vision:")
-    print(response.choices[0].message.content.strip())
-except Exception as e:
-    print("❌ Ошибка Vision:")
-    print(e)
+    print("🧠 Ответ Vision:\n", response.choices[0].message.content.strip())
+
+except openai.OpenAIError as e:
+    print("❌ Ошибка Vision:\n", e)
+
 
