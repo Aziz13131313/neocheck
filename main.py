@@ -32,6 +32,18 @@ NORMALIZED_FORMS = {
     ]
 }
 
+NORMALIZED_TYPES = {
+    "красный прозрачный камень": "Рубин",
+    "синий прозрачный камень": "Сапфир",
+    "зелёный камень": "Изумруд",
+    "фиолетовый прозрачный камень": "Аметист",
+    "жёлтый камень": "Цитрин",
+    "коричневый камень": "Раухтопаз",
+    "бесцветный камень": "Хрусталь",
+    "белый камень": "Жемчуг",
+    "чёрный камень": "Гагат"
+}
+
 app = Flask(__name__)
 
 try:
@@ -40,7 +52,7 @@ try:
     df_stones["Ширина"] = pd.to_numeric(df_stones["Ширина"], errors="coerce")
     df_stones["Вес сброса"] = pd.to_numeric(df_stones["Вес сброса"], errors="coerce")
     df_stones["Высота"] = pd.to_numeric(df_stones["Высота"], errors="coerce")
-    df_stones["Форма"] = df_stones["Форма"].astype(str).str.lower().str.strip()
+    df_stones["Форма"] = df_stones["Форма"].astype(str).str.lower().str.strip().str.replace("удинненый", "удлиненный")
     df_stones["Название"] = df_stones["Название"].astype(str).str.capitalize().str.strip()
 except Exception as e:
     print("❌ Ошибка загрузки таблицы:", e)
@@ -68,19 +80,15 @@ def identify_stone_with_vision(image_url):
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": (
-                    "Ты эксперт-геммолог. Игнорируй пальцы, тени и фон. Ответь строго в этом формате, без пояснений и лишнего текста:\n"
-                    "Вид: [Название]\nАльтернатива: [Альтернатива]\nФорма: [Форма]"
-                )},
+                {"role": "system", "content": "Ты эксперт-геммолог. Игнорируй кожу и фон. Дай: Вид: Альтернатива: Форма:"},
                 {"role": "user", "content": [
                     {"type": "text", "text": "Что за камень на фото?"},
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]}
             ],
-            max_tokens=300
+            max_tokens=150
         )
-        result = response.choices[0].message.content.strip()
-        return result
+        return response.choices[0].message.content.strip()
     except Exception as e:
         print("❌ Ошибка Vision:", e)
         return None
@@ -88,6 +96,12 @@ def identify_stone_with_vision(image_url):
 def normalize_form(f):
     f = f.strip().lower()
     return NORMALIZED_FORMS.get(f, f)
+
+def normalize_type(t):
+    if not t:
+        return None
+    t = t.lower().strip()
+    return NORMALIZED_TYPES.get(t, t.capitalize())
 
 def find_closest_stone(length, width, form, stone_type):
     form = normalize_form(form)
@@ -120,10 +134,10 @@ def telegram_webhook():
         url = get_file_url(file_id)
         vision = identify_stone_with_vision(url) or ""
 
-        stone_type = re.search(r"Вид[:\s]+(.+)", vision)
-        form = re.search(r"Форма[:\s]+(.+)", vision)
-        stone_type = stone_type.group(1).strip().capitalize() if stone_type else None
-        form = normalize_form(form.group(1).strip()) if form else None
+        raw_type = re.search(r"Вид[:\s]+(.+)", vision)
+        raw_form = re.search(r"Форма[:\s]+(.+)", vision)
+        stone_type = normalize_type(raw_type.group(1).strip()) if raw_type else None
+        form = normalize_form(raw_form.group(1).strip()) if raw_form else None
 
         density = ALL_DENSITIES.get(stone_type)
         response = ""
