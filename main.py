@@ -6,9 +6,7 @@ import pandas as pd
 from math import pi
 import os
 
-client = openai.OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 TELEGRAM_TOKEN = "7743518282:AAEQ29yMWS19-Tb4NTu5p02Rh68iI0cYziE"
 TELEGRAM_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
@@ -24,17 +22,13 @@ ALL_DENSITIES = {
 NORMALIZED_FORMS = {
     f.strip().lower(): f.strip().lower() for f in [
         'груша', 'кабошон', 'кабошон овал', 'кабошон капля', 'кабошон квадрат', 'кабошон круг',
-        'кабошон маркиз', 'кабошон прямоугольник', 'кабошон сердце', 'кабошон сфера',
+        'кабошон маркиз', 'кабошон овал', 'кабошон прямоугольник', 'кабошон сердце', 'кабошон сфера',
         'кабошон удлиненный овал', 'кабюшон', 'капля', 'квадрат', 'клевер', 'круг', 'маркиз',
         'овал', 'овал удлиненный', 'полукруг', 'прямоугольник', 'прямоугольник удлиненный', 'пятилистник',
         'ромб', 'сердце', 'сфера', 'треугольник', 'удлиненный овал', 'фантазия', 'цветок',
         'цветочник', 'четырехлистник', 'шестилистник', 'шар'
     ]
 }
-
-VISION_CLEANUP = [
-    r"похоже на", r"скорее всего", r"возможно", r"это может быть", r"это может быть и другой", r"наверное"
-]
 
 app = Flask(__name__)
 
@@ -67,20 +61,14 @@ def get_file_url(file_id):
 def send_message(chat_id, text):
     requests.post(f"{TELEGRAM_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
 
-def clean_vision_text(text):
-    cleaned = text.lower()
-    for phrase in VISION_CLEANUP:
-        cleaned = re.sub(phrase, "", cleaned, flags=re.IGNORECASE)
-    return cleaned.strip().capitalize()
-
 def identify_stone_with_vision(image_url):
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "Ты эксперт-геммолог. Игнорируй кожу и фон. Дай: Вид: [Название]\nАльтернатива: [Вариант]\nФорма: [Форма]"},
+                {"role": "system", "content": "Ты эксперт-геммолог. Игнорируй кожу и фон. Дай: Вид: Альтернатива: Форма:"},
                 {"role": "user", "content": [
-                    {"type": "text", "text": "Что за камень на фото? Только камень, дай точный вид, альтернативу и форму."},
+                    {"type": "text", "text": "Что за камень на фото?"},
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]}
             ],
@@ -91,7 +79,18 @@ def identify_stone_with_vision(image_url):
         print("❌ Ошибка Vision:", e)
         return None
 
+def clean_stone_type(raw):
+    if not raw:
+        return None
+    raw = raw.lower()
+    for name in ALL_DENSITIES:
+        if name.lower() in raw:
+            return name
+    return None
+
 def normalize_form(f):
+    if not f:
+        return None
     f = f.strip().lower()
     return NORMALIZED_FORMS.get(f, f)
 
@@ -128,7 +127,7 @@ def telegram_webhook():
 
         stone_type_match = re.search(r"Вид[:\s]+(.+)", vision)
         form_match = re.search(r"Форма[:\s]+(.+)", vision)
-        stone_type = clean_vision_text(stone_type_match.group(1)) if stone_type_match else None
+        stone_type = clean_stone_type(stone_type_match.group(1)) if stone_type_match else None
         form = normalize_form(form_match.group(1)) if form_match else None
 
         density = ALL_DENSITIES.get(stone_type)
