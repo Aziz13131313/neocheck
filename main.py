@@ -24,7 +24,7 @@ ALL_DENSITIES = {
 NORMALIZED_FORMS = {
     f.strip().lower(): f.strip().lower() for f in [
         'груша', 'кабошон', 'кабошон овал', 'кабошон капля', 'кабошон квадрат', 'кабошон круг',
-        'кабошон маркиз', 'кабошон овал', 'кабошон прямоугольник', 'кабошон сердце', 'кабошон сфера',
+        'кабошон маркиз', 'кабошон прямоугольник', 'кабошон сердце', 'кабошон сфера',
         'кабошон удлиненный овал', 'кабюшон', 'капля', 'квадрат', 'клевер', 'круг', 'маркиз',
         'овал', 'овал удлиненный', 'полукруг', 'прямоугольник', 'прямоугольник удлиненный', 'пятилистник',
         'ромб', 'сердце', 'сфера', 'треугольник', 'удлиненный овал', 'фантазия', 'цветок',
@@ -32,17 +32,9 @@ NORMALIZED_FORMS = {
     ]
 }
 
-NORMALIZED_TYPES = {
-    "красный прозрачный камень": "Рубин",
-    "синий прозрачный камень": "Сапфир",
-    "зелёный камень": "Изумруд",
-    "фиолетовый прозрачный камень": "Аметист",
-    "жёлтый камень": "Цитрин",
-    "коричневый камень": "Раухтопаз",
-    "бесцветный камень": "Хрусталь",
-    "белый камень": "Жемчуг",
-    "чёрный камень": "Гагат"
-}
+VISION_CLEANUP = [
+    r"похоже на", r"скорее всего", r"возможно", r"это может быть", r"это может быть и другой", r"наверное"
+]
 
 app = Flask(__name__)
 
@@ -52,7 +44,7 @@ try:
     df_stones["Ширина"] = pd.to_numeric(df_stones["Ширина"], errors="coerce")
     df_stones["Вес сброса"] = pd.to_numeric(df_stones["Вес сброса"], errors="coerce")
     df_stones["Высота"] = pd.to_numeric(df_stones["Высота"], errors="coerce")
-    df_stones["Форма"] = df_stones["Форма"].astype(str).str.lower().str.strip().str.replace("удинненый", "удлиненный")
+    df_stones["Форма"] = df_stones["Форма"].astype(str).str.lower().str.strip()
     df_stones["Название"] = df_stones["Название"].astype(str).str.capitalize().str.strip()
 except Exception as e:
     print("❌ Ошибка загрузки таблицы:", e)
@@ -75,14 +67,20 @@ def get_file_url(file_id):
 def send_message(chat_id, text):
     requests.post(f"{TELEGRAM_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
 
+def clean_vision_text(text):
+    cleaned = text.lower()
+    for phrase in VISION_CLEANUP:
+        cleaned = re.sub(phrase, "", cleaned, flags=re.IGNORECASE)
+    return cleaned.strip().capitalize()
+
 def identify_stone_with_vision(image_url):
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "Ты эксперт-геммолог. Игнорируй кожу и фон. Дай: Вид: Альтернатива: Форма:"},
+                {"role": "system", "content": "Ты эксперт-геммолог. Игнорируй кожу и фон. Дай: Вид: [Название]\nАльтернатива: [Вариант]\nФорма: [Форма]"},
                 {"role": "user", "content": [
-                    {"type": "text", "text": "Что за камень на фото?"},
+                    {"type": "text", "text": "Что за камень на фото? Только камень, дай точный вид, альтернативу и форму."},
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]}
             ],
@@ -96,12 +94,6 @@ def identify_stone_with_vision(image_url):
 def normalize_form(f):
     f = f.strip().lower()
     return NORMALIZED_FORMS.get(f, f)
-
-def normalize_type(t):
-    if not t:
-        return None
-    t = t.lower().strip()
-    return NORMALIZED_TYPES.get(t, t.capitalize())
 
 def find_closest_stone(length, width, form, stone_type):
     form = normalize_form(form)
@@ -134,10 +126,10 @@ def telegram_webhook():
         url = get_file_url(file_id)
         vision = identify_stone_with_vision(url) or ""
 
-        raw_type = re.search(r"Вид[:\s]+(.+)", vision)
-        raw_form = re.search(r"Форма[:\s]+(.+)", vision)
-        stone_type = normalize_type(raw_type.group(1).strip()) if raw_type else None
-        form = normalize_form(raw_form.group(1).strip()) if raw_form else None
+        stone_type_match = re.search(r"Вид[:\s]+(.+)", vision)
+        form_match = re.search(r"Форма[:\s]+(.+)", vision)
+        stone_type = clean_vision_text(stone_type_match.group(1)) if stone_type_match else None
+        form = normalize_form(form_match.group(1)) if form_match else None
 
         density = ALL_DENSITIES.get(stone_type)
         response = ""
@@ -174,6 +166,7 @@ def index():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
 
 
 
