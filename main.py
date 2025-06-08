@@ -36,7 +36,9 @@ DENSITY_MAP = {
 SHAPE_COEFFS = {
     "Круг": 0.0018, "Овал": 0.0017, "Удлиненный овал": 0.00165, "Маркиз": 0.0016,
     "Прямоугольник": 0.0015, "Квадрат": 0.0016, "Груша": 0.0016, "Сердце": 0.00155,
-    "Клевер": 0.0015, "Четырехлистник": 0.0015, "Пятилистник": 0.0015, "Шестилистник": 0.0015
+    "Клевер": 0.0015, "Четырехлистник": 0.0015, "Пятилистник": 0.0015, "Шестилистник": 0.0015,
+    "Кабошон овал": 0.0017, "Кабошон круг": 0.0018, "Кабошон квадрат": 0.0016,
+    "Кабошон прямоугольник": 0.0015, "Кабошон сфера": 0.0019, "Удлиненный прямоугольник": 0.0014
 }
 
 
@@ -97,8 +99,8 @@ def estimate_weight(length, width, shape, stone_type):
         coeff = SHAPE_COEFFS.get(shape.capitalize(), 0.0015)
         volume = coeff * length * width * height
     elif shape_lower in ["шар", "сфера", "кабошон сфера"]:
-        height = length  # длина = ширина = высота
-        volume = (4/3) * 3.1416 * (length / 2) ** 3
+        height = length
+        volume = length * width * height
     else:
         coeff = SHAPE_COEFFS.get(shape, 0.0016)
         volume = coeff * length * width
@@ -188,6 +190,7 @@ def telegram_webhook():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
 
 
 
