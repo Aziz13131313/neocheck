@@ -16,6 +16,7 @@ app = Flask(__name__)
 # Загрузка Excel-таблицы
 try:
     df_stones = pd.read_excel("таблица_обновленная.xlsx")
+    df_stones = df_stones.drop(columns=[col for col in df_stones.columns if "непрозрач" in col.lower()], errors="ignore")
     df_stones["Длина"] = pd.to_numeric(df_stones["Длина"], errors="coerce")
     df_stones["Ширина"] = pd.to_numeric(df_stones["Ширина"], errors="coerce")
     df_stones["Высота"] = pd.to_numeric(df_stones["Высота"], errors="coerce")
@@ -178,6 +179,7 @@ def telegram_webhook():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
 
 
 
