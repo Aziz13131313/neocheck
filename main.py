@@ -4,6 +4,7 @@ import os
 import re
 import openai
 import pandas as pd
+from math import pi
 
 # Конфигурация
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -34,19 +35,12 @@ DENSITY_MAP = {
     "Флюорит": 3.18, "Малахит": 4.0, "Перламутр": 2.7, "Пластик": 1.2, "Металл": 8.0
 }
 
-SHAPE_COEFFS = {
-    "круг": 0.0018, "овал": 0.0017, "удлиненный овал": 0.00165, "маркиз": 0.0016,
-    "прямоугольник": 0.0015, "квадрат": 0.0016, "груша": 0.0016, "сердце": 0.00155,
-    "клевер": 0.0015, "четырехлистник": 0.0015, "пятилистник": 0.0015, "шестилистник": 0.0015,
-    "цветок": 0.0015, "удлиненный прямоугольник": 0.00145, "шар": 1.0, "сфера": 1.0
-}
-
 SHAPE_ALIASES = {
     "четырёхлепестковая": "четырехлистник", "четырёхлистник": "четырехлистник",
     "клевер": "четырехлистник", "удлинённый прямоугольник": "удлиненный прямоугольник",
     "кабошон овал": "овал", "кабошон круг": "круг", "кабошон квадрат": "квадрат",
     "кабошон": "круг", "багет": "удлиненный прямоугольник", "цветок": "четырехлистник",
-    "четырехлепестковая": "четырехлистник"
+    "четырехлепестковая": "четырехлистник", "принцесса": "квадрат"
 }
 
 def normalize_shape(shape):
@@ -103,16 +97,15 @@ def estimate_weight(length, width, shape, stone_type):
 
     if shape in ["четырехлистник", "пятилистник", "шестилистник"]:
         height = 2.0
-        coeff = SHAPE_COEFFS.get(shape, 0.0015)
-        volume = coeff * length * width * height
+        volume = (pi * length * width * height) / 6
     elif shape in ["шар", "сфера"]:
         height = length
-        volume = (4/3) * 3.1416 * (length / 2) ** 3
+        volume = (4 / 3) * pi * (length / 2) ** 3
     else:
-        coeff = SHAPE_COEFFS.get(shape, 0.0016)
-        volume = coeff * length * width
+        height = (length + width) / 4
+        volume = (pi * length * width * height) / 6
 
-    return round(volume * density, 2)
+    return round(volume * density / 1000, 2)
 
 def identify_stone_with_vision(image_url):
     try:
@@ -194,6 +187,7 @@ def telegram_webhook():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
 
 
 
