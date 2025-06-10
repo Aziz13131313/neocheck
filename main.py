@@ -15,7 +15,7 @@ app = Flask(__name__)
 
 # Загрузка Excel-таблицы
 try:
-    df_stones = pd.read_excel("таблица_обновленная.xlsx")
+    df_stones = pd.read_excel("таблица новая123.xlsx")
     df_stones = df_stones.drop(columns=[col for col in df_stones.columns if "непрозрач" in col.lower()], errors="ignore")
     df_stones["Длина"] = pd.to_numeric(df_stones["Длина"], errors="coerce")
     df_stones["Ширина"] = pd.to_numeric(df_stones["Ширина"], errors="coerce")
@@ -35,15 +35,15 @@ DENSITY_MAP = {
     "Флюорит": 3.18, "Малахит": 4.0, "Перламутр": 2.7, "Пластик": 1.2, "Металл": 8.0
 }
 
-SHAPE_ALIASES = {f.lower(): f.lower() for f in df_stones["Форма"].unique() if isinstance(f, str)}
-
-SHAPE_COEFFS = {f: 0.0016 for f in SHAPE_ALIASES.keys()}
-SHAPE_COEFFS.update({"шар": 1.0, "сфера": 1.0})
-
+SHAPE_COEFFS = {
+    "круг": 0.0018, "овал": 0.0017, "удлиненный овал": 0.00165, "маркиз": 0.0016,
+    "прямоугольник": 0.0015, "квадрат": 0.0016, "груша": 0.0016, "сердце": 0.00155,
+    "четырехлистник": 0.0015, "пятилистник": 0.0015, "шестилистник": 0.0015,
+    "цветок": 0.0015, "удлиненный прямоугольник": 0.00145, "шар": 1.0, "сфера": 1.0
+}
 
 def normalize_shape(shape):
-    shape = shape.strip().lower()
-    return SHAPE_ALIASES.get(shape, shape)
+    return shape.strip().lower()
 
 def extract_dimensions(text):
     numbers = re.findall(r"(\d+(?:[.,]\d+)?)", text)
@@ -93,8 +93,9 @@ def estimate_weight(length, width, shape, stone_type):
     shape = normalize_shape(shape)
     density = DENSITY_MAP.get(stone_type, 2.5)
     coeff = SHAPE_COEFFS.get(shape, 0.0016)
-    volume = coeff * length * width
-    return round(volume * density * 1.8, 2)
+    height = 2.0 if shape in ["четырехлистник", "цветок", "пятилистник", "шестилистник"] else (length + width) / 4
+    volume = coeff * length * width * height
+    return round(volume * density / 1000, 2)
 
 def identify_stone_with_vision(image_url):
     try:
@@ -103,7 +104,7 @@ def identify_stone_with_vision(image_url):
             messages=[
                 {
                     "role": "system",
-                    "content": "Ты эксперт-геммолог. Определи вид и форму строго в пределах таблицы. Всегда пиши Розовый рубин, если камень розового цвета и похож на рубин. Ответ строго в формате: Вид: ...\nФорма: ...\nАльтернатива: ..."
+                    "content": "Ты эксперт-геммолог. Если камень розового цвета и похож на рубин, всегда пиши 'Розовый рубин'. Форму выбирай строго из списка таблицы. Ответ строго: Вид: ...\nФорма: ...\nАльтернатива: ..."
                 },
                 {
                     "role": "user",
@@ -176,6 +177,7 @@ def telegram_webhook():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
 
 
 
