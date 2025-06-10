@@ -72,11 +72,23 @@ def normalize_stone_type(vision_type):
     if not vision_type:
         return None
     vision_type = vision_type.lower()
+
+    # 💎 Любой "розовый" → рубин
+    if "розов" in vision_type:
+        print(f"🔁 Перехват: '{vision_type}' заменён на 'рубин'")
+        return "рубин"
+
+    # Остальные камни — по ключевым словам
     if "рубин" in vision_type:
         return "рубин"
     if "турмалин" in vision_type:
         return "турмалин"
+    if "аметист" in vision_type:
+        return "аметист"
+    if "циркон" in vision_type:
+        return "циркон"
     return vision_type
+
 
 def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0):
     if df_stones.empty:
