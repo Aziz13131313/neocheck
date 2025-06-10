@@ -16,40 +16,44 @@ app = Flask(__name__)
 # Загрузка Excel-таблицы
 try:
     df_stones = pd.read_excel("таблица новая123.xlsx")
-    df_stones = df_stones.drop(columns=[col for col in df_stones.columns if "непрозрач" in col.lower()], errors="ignore")
     df_stones["Длина"] = pd.to_numeric(df_stones["Длина"], errors="coerce")
     df_stones["Ширина"] = pd.to_numeric(df_stones["Ширина"], errors="coerce")
     df_stones["Высота"] = pd.to_numeric(df_stones["Высота"], errors="coerce")
     df_stones["Вес сброса"] = pd.to_numeric(df_stones["Вес сброса"], errors="coerce")
-    df_stones["Форма"] = df_stones["Форма"].astype(str).str.strip().str.lower()
-    df_stones["Название"] = df_stones["Название"].astype(str).str.strip().str.capitalize()
 except Exception as e:
     print("❌ Ошибка загрузки таблицы:", e)
     df_stones = pd.DataFrame()
 
+# Формулы плотностей по видам камней (по умолчанию)
 DENSITY_MAP = {
-    "Рубин": 4.0, "Розовый рубин": 4.0, "Аметист": 2.65, "Топаз": 3.5, "Гранат": 3.95, "Хризолит": 3.3,
-    "Циркон": 4.6, "Шпинель": 3.6, "Турмалин": 3.1, "Аквамарин": 2.7, "Изумруд": 2.8,
-    "Гематит": 5.2, "Кварц": 2.65, "Кварц дымчатый": 2.65, "Обсидиан": 2.4,
-    "Стекло": 2.5, "Неизвестно": 2.5, "Жемчуг": 2.7, "Гагат": 1.3, "Фианит": 5.5,
-    "Флюорит": 3.18, "Малахит": 4.0, "Перламутр": 2.7, "Пластик": 1.2, "Металл": 8.0
+    "Рубин": 4.0,
+    "Аметист": 2.65,
+    "Топаз": 3.5,
+    "Гранат": 3.95,
+    "Хризолит": 3.3,
+    "Циркон": 4.6,
+    "Шпинель": 3.6,
+    "Турмалин": 3.1,
+    "Аквамарин": 2.7,
+    "Изумруд": 2.8,
+    "Гематит": 5.2,
+    "Кварц": 2.65,
+    "Кварц дымчатый": 2.65,
+    "Обсидиан": 2.4,
+    "Стекло": 2.5,
+    "Неизвестно": 2.5
 }
 
 SHAPE_COEFFS = {
-    "круг": 0.0018, "овал": 0.0017, "удлиненный овал": 0.00165, "маркиз": 0.0016,
-    "прямоугольник": 0.0015, "квадрат": 0.0016, "груша": 0.0016, "сердце": 0.00155,
-    "четырехлистник": 0.0015, "пятилистник": 0.0015, "шестилистник": 0.0015,
-    "цветок": 0.0015, "удлиненный прямоугольник": 0.00145, "шар": 1.0, "сфера": 1.0
+    "Круг": 0.0018,
+    "Овал": 0.0017,
+    "Удлиненный овал": 0.00165,
+    "Маркиз": 0.0016,
+    "Прямоугольник": 0.0015,
+    "Квадрат": 0.0016,
+    "Груша": 0.0016,
+    "Сердце": 0.00155
 }
-
-def normalize_shape(shape):
-    return shape.strip().lower()
-
-def normalize_type(stone_type):
-    name = stone_type.lower()
-    if "рубин" in name:
-        return "Рубин"
-    return stone_type.capitalize()
 
 def extract_dimensions(text):
     numbers = re.findall(r"(\d+(?:[.,]\d+)?)", text)
@@ -76,7 +80,7 @@ def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0
 
     df_filtered = df_stones.copy()
     if shape:
-        df_filtered = df_filtered[df_filtered["Форма"] == shape]
+        df_filtered = df_filtered[df_filtered["Форма"].str.lower() == shape.lower()]
     if stone_type:
         df_filtered = df_filtered[df_filtered["Название"].str.lower().str.contains(stone_type.lower())]
 
@@ -96,13 +100,10 @@ def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0
     return None
 
 def estimate_weight(length, width, shape, stone_type):
-    shape = normalize_shape(shape)
-    stone_type = normalize_type(stone_type)
     density = DENSITY_MAP.get(stone_type, 2.5)
     coeff = SHAPE_COEFFS.get(shape, 0.0016)
-    height = 2.0 if shape in ["четырехлистник", "цветок", "пятилистник", "шестилистник"] else (length + width) / 4
-    volume = coeff * length * width * height
-    return round(volume * density / 1000, 2)
+    volume = coeff * length * width
+    return round(volume * density, 2)
 
 def identify_stone_with_vision(image_url):
     try:
@@ -111,7 +112,7 @@ def identify_stone_with_vision(image_url):
             messages=[
                 {
                     "role": "system",
-                    "content": "Ты эксперт-геммолог. Если камень розового цвета и похож на рубин, всегда пиши 'Розовый рубин'. Форму выбирай строго из списка таблицы. Ответ строго: Вид: ...\nФорма: ...\nАльтернатива: ..."
+                    "content": "Ты эксперт-геммолог. Определи вид и форму камня. Ответ дай строго в формате: Вид: ...\nФорма: ...\nАльтернатива: ..."
                 },
                 {
                     "role": "user",
@@ -150,9 +151,9 @@ def telegram_webhook():
             if vision_result:
                 for line in vision_result.splitlines():
                     if line.lower().startswith("форма"):
-                        shape = normalize_shape(line.split(":", 1)[-1].strip())
+                        shape = line.split(":", 1)[-1].strip()
                     elif line.lower().startswith("вид"):
-                        stone_type = normalize_type(line.split(":", 1)[-1].strip())
+                        stone_type = line.split(":", 1)[-1].strip()
 
             if length and width:
                 stone_info = find_closest_stone(length, width, shape, stone_type)
@@ -184,6 +185,7 @@ def telegram_webhook():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
 
 
 
