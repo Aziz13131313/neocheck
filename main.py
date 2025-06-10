@@ -24,9 +24,10 @@ except Exception as e:
     print("❌ Ошибка загрузки таблицы:", e)
     df_stones = pd.DataFrame()
 
-# Формулы плотностей по видам камней (по умолчанию)
+# Плотности камней
 DENSITY_MAP = {
     "Рубин": 4.0,
+    "Розовый рубин": 4.0,
     "Аметист": 2.65,
     "Топаз": 3.5,
     "Гранат": 3.95,
@@ -40,10 +41,19 @@ DENSITY_MAP = {
     "Кварц": 2.65,
     "Кварц дымчатый": 2.65,
     "Обсидиан": 2.4,
+    "Жемчуг": 2.7,
+    "Малахит": 4.0,
+    "Сапфир": 4.0,
+    "Флюорит": 3.2,
+    "Гагат": 1.3,
+    "Пластик": 1.2,
+    "Металл": 8.0,
     "Стекло": 2.5,
+    "Эмаль": 2.3,
     "Неизвестно": 2.5
 }
 
+# Коэффициенты формы
 SHAPE_COEFFS = {
     "Круг": 0.0018,
     "Овал": 0.0017,
@@ -74,6 +84,22 @@ def send_message(chat_id, text):
     print("📤 Ответ:", text)
     requests.post(f"{TELEGRAM_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
 
+def normalize_shape(vision_shape):
+    if not vision_shape:
+        return None
+    table_shapes = df_stones["Форма"].dropna().unique()
+    for s in table_shapes:
+        if s.lower() in vision_shape.lower():
+            return s
+    return None
+
+def normalize_stone_type(vision_type):
+    if not vision_type:
+        return None
+    if "розов" in vision_type.lower():
+        return "Розовый рубин"
+    return vision_type
+
 def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0):
     if df_stones.empty:
         return None
@@ -89,7 +115,7 @@ def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0
 
     if not df_nearest.empty:
         best = df_nearest.iloc[0]
-        delta_weight = best["delta"] * 0.1
+        delta_weight = best["delta"] * 0.03  # ранее было 0.1 — исправлено
         corrected_weight = round(best["Вес сброса"] - delta_weight, 2)
         return {
             "Вид": best["Название"],
@@ -151,22 +177,22 @@ def telegram_webhook():
             if vision_result:
                 for line in vision_result.splitlines():
                     if line.lower().startswith("форма"):
-                        shape = line.split(":", 1)[-1].strip()
+                        raw_shape = line.split(":", 1)[-1].strip()
+                        shape = normalize_shape(raw_shape)
                     elif line.lower().startswith("вид"):
-                        stone_type = line.split(":", 1)[-1].strip()
-
-            if length and width:
-                stone_info = find_closest_stone(length, width, shape, stone_type)
+                        raw_type = line.split(":", 1)[-1].strip()
+                        stone_type = normalize_stone_type(raw_type)
 
             response_text = f"📏 Размер: {length} × {width} мм\n"
 
-            if stone_info:
-                response_text += (
-                    f"⚖️ Вес: ~{stone_info['Вес']} г\n"
-                    f"📐 Форма: {stone_info['Форма']}\n"
-                )
-            else:
-                if length and width and shape and stone_type:
+            if length and width:
+                stone_info = find_closest_stone(length, width, shape, stone_type)
+                if stone_info:
+                    response_text += (
+                        f"⚖️ Вес: ~{stone_info['Вес']} г\n"
+                        f"📐 Форма: {stone_info['Форма']}\n"
+                    )
+                elif shape and stone_type:
                     weight = estimate_weight(length, width, shape, stone_type)
                     response_text += (
                         f"⚖️ ~Вес по формуле: {weight} г\n"
@@ -174,7 +200,7 @@ def telegram_webhook():
                     )
 
             if vision_result:
-                response_text += f"🧠 Vision:\n{vision_result}"
+                response_text += f"\n🧠 Vision:\n{vision_result}"
 
             send_message(chat_id, response_text)
 
@@ -186,7 +212,6 @@ def telegram_webhook():
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
 
-    app.run(host="0.0.0.0", port=8080)
 
 
 
