@@ -45,6 +45,12 @@ SHAPE_COEFFS = {
 def normalize_shape(shape):
     return shape.strip().lower()
 
+def normalize_type(stone_type):
+    name = stone_type.lower()
+    if "рубин" in name:
+        return "Рубин"
+    return stone_type.capitalize()
+
 def extract_dimensions(text):
     numbers = re.findall(r"(\d+(?:[.,]\d+)?)", text)
     if len(numbers) >= 2:
@@ -91,6 +97,7 @@ def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0
 
 def estimate_weight(length, width, shape, stone_type):
     shape = normalize_shape(shape)
+    stone_type = normalize_type(stone_type)
     density = DENSITY_MAP.get(stone_type, 2.5)
     coeff = SHAPE_COEFFS.get(shape, 0.0016)
     height = 2.0 if shape in ["четырехлистник", "цветок", "пятилистник", "шестилистник"] else (length + width) / 4
@@ -145,7 +152,7 @@ def telegram_webhook():
                     if line.lower().startswith("форма"):
                         shape = normalize_shape(line.split(":", 1)[-1].strip())
                     elif line.lower().startswith("вид"):
-                        stone_type = line.split(":", 1)[-1].strip().capitalize()
+                        stone_type = normalize_type(line.split(":", 1)[-1].strip())
 
             if length and width:
                 stone_info = find_closest_stone(length, width, shape, stone_type)
@@ -177,6 +184,7 @@ def telegram_webhook():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
+
 
 
 
