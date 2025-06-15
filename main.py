@@ -73,12 +73,11 @@ def normalize_stone_type(vision_type):
         return None
     vision_type = vision_type.lower()
 
-    # 💎 Любой "розовый" → рубин
+    # 💎 Если есть "розов", всегда считаем рубином
     if "розов" in vision_type:
-        print(f"🔁 Перехват: '{vision_type}' заменён на 'рубин'")
+        print(f"🔁 Перехват (розовый): '{vision_type}' → 'рубин'")
         return "рубин"
 
-    # Остальные камни — по ключевым словам
     if "рубин" in vision_type:
         return "рубин"
     if "турмалин" in vision_type:
@@ -87,7 +86,16 @@ def normalize_stone_type(vision_type):
         return "аметист"
     if "циркон" in vision_type:
         return "циркон"
+    if "топаз" in vision_type:
+        return "топаз"
+    if "шпинель" in vision_type:
+        return "шпинель"
+    if "спессартин" in vision_type:
+        return "гранат"
+
     return vision_type
+
+
 
 
 def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0):
