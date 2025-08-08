@@ -40,10 +40,12 @@ SHAPE_COEFFS = {
 }
 
 def extract_dimensions(text):
-    numbers = re.findall(r"(\d+(?:[.,]\d+)?)", text)
+    numbers = [float(n.replace(",", ".")) for n in re.findall(r"(\d+(?:[.,]\d+)?)", text)]
     if len(numbers) >= 2:
-        return float(numbers[0].replace(",", ".")), float(numbers[1].replace(",", "."))
-    return None, None
+        length, width = numbers[0], numbers[1]
+        height = numbers[2] if len(numbers) >= 3 else None
+        return length, width, height
+    return None, None, None
 
 def get_file_url(file_id):
     res = requests.get(f"{TELEGRAM_URL}/getFile?file_id={file_id}")
@@ -71,34 +73,36 @@ def normalize_shape(vision_shape):
 def normalize_stone_type(vision_type):
     if not vision_type:
         return None
-    vision_type = vision_type.lower()
 
-    # 💎 Если есть "розов", всегда считаем рубином
-    if "розов" in vision_type:
-        print(f"🔁 Перехват (розовый): '{vision_type}' → 'рубин'")
-        return "рубин"
+    vision_type = vision_type.lower().strip()
 
-    if "рубин" in vision_type:
-        return "рубин"
-    if "турмалин" in vision_type:
-        return "турмалин"
-    if "аметист" in vision_type:
-        return "аметист"
-    if "циркон" in vision_type:
-        return "циркон"
-    if "топаз" in vision_type:
-        return "топаз"
-    if "шпинель" in vision_type:
-        return "шпинель"
-    if "спессартин" in vision_type:
-        return "гранат"
+    # Простейшие перехваты по ключевым словам
+    synonyms = {
+        "розов": "рубин",
+        "спессартин": "гранат",
+        "голубой топаз": "топаз",
+        "дымчатый кварц": "кварц",
+        "горный хрусталь": "кварц",
+    }
+    for key, val in synonyms.items():
+        if key in vision_type:
+            print(f"🔁 Перехват ({key}): '{vision_type}' → '{val}'")
+            vision_type = val
+            break
+
+    known_types = df_stones["Название"].dropna().unique()
+    lower_map = {t.lower(): t for t in known_types}
+    import difflib
+    match = difflib.get_close_matches(vision_type, lower_map.keys(), n=1, cutoff=0.6)
+    if match:
+        return lower_map[match[0]]
 
     return vision_type
 
 
 
 
-def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0):
+def find_closest_stone(length, width, height=None, shape=None, stone_type=None, tolerance=2.0):
     if df_stones.empty:
         return None
 
@@ -109,13 +113,22 @@ def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0
     if stone_type:
         df_filtered = df_filtered[df_filtered["Название"].str.lower().str.contains(stone_type.lower())]
 
-    df_filtered["delta"] = ((df_filtered["Длина"] - length) ** 2 + (df_filtered["Ширина"] - width) ** 2) ** 0.5
+    delta = (df_filtered["Длина"] - length) ** 2 + (df_filtered["Ширина"] - width) ** 2
+    if height is not None:
+        delta += (df_filtered["Высота"] - height) ** 2
+    df_filtered["delta"] = delta ** 0.5
     df_nearest = df_filtered[df_filtered["delta"] <= tolerance].sort_values(by="delta")
 
     if not df_nearest.empty:
         best = df_nearest.iloc[0]
-        delta_weight = best["delta"] * 0.03
-        corrected_weight = round(best["Вес сброса"] - delta_weight, 2)
+        if height is not None and not pd.isna(best["Высота"]):
+            ref_volume = best["Длина"] * best["Ширина"] * best["Высота"]
+            volume = length * width * height
+        else:
+            ref_volume = best["Длина"] * best["Ширина"]
+            volume = length * width
+        ratio = volume / ref_volume
+        corrected_weight = round(best["Вес сброса"] * ratio, 2)
         return {
             "Вид": best["Название"],
             "Форма": best["Форма"],
@@ -124,12 +137,14 @@ def find_closest_stone(length, width, shape=None, stone_type=None, tolerance=2.0
         }
     return None
 
-def estimate_weight(length, width, shape, stone_type):
+def estimate_weight(length, width, height, shape, stone_type):
     density = DENSITY_MAP.get(stone_type, DENSITY_MAP["неизвестно"])
     coeff = SHAPE_COEFFS.get(shape, 0.0016)
     if length is None or width is None:
         return 0.0
     volume = coeff * length * width
+    if height:
+        volume *= height
     return round(volume * density, 2)
 
 def identify_stone_with_vision(image_url):
@@ -168,7 +183,7 @@ def telegram_webhook():
         if "photo" in message:
             file_id = message["photo"][-1]["file_id"]
             caption = message.get("caption", "")
-            length, width = extract_dimensions(caption)
+            length, width, height = extract_dimensions(caption)
             file_url = get_file_url(file_id)
 
             stone_info = None
@@ -184,17 +199,21 @@ def telegram_webhook():
                         raw_type = line.split(":", 1)[-1].strip()
                         stone_type = normalize_stone_type(raw_type)
 
-            response_text = f"📏 Размер: {length} × {width} мм\n"
+            if height:
+                size_text = f"{length} × {width} × {height} мм"
+            else:
+                size_text = f"{length} × {width} мм"
+            response_text = f"📏 Размер: {size_text}\n"
 
             if length and width:
-                stone_info = find_closest_stone(length, width, shape, stone_type)
+                stone_info = find_closest_stone(length, width, height, shape, stone_type)
                 if stone_info:
                     response_text += (
                         f"⚖️ Вес: ~{stone_info['Вес']} г\n"
                         f"📐 Форма: {stone_info['Форма']}\n"
                     )
                 elif shape and stone_type:
-                    weight = estimate_weight(length, width, shape.lower(), stone_type.lower())
+                    weight = estimate_weight(length, width, height, shape.lower(), stone_type.lower())
                     response_text += (
                         f"⚖️ ~Вес по формуле: {weight} г\n"
                         f"📐 Форма: {shape}\n"
